@@ -4,13 +4,15 @@
 #include <fstream>
 #include <string>
 
-constexpr auto MAX_VTXS = 64;
-constexpr auto INF = INT_MAX;
+constexpr int MAX_VTXS = 64;
+constexpr int INF = INT_MAX;
 
 class GraphAdj
 {
 public:
-	int Adj[MAX_VTXS][MAX_VTXS] = { 0 };
+	//int Adj[MAX_VTXS][MAX_VTXS] = { 0 };
+	//맵을 위한 이중 포인터(2차원 배열로 사용)
+	int** Adj;
 	char VertexNames[MAX_VTXS];
 private:
 	int VtxCount = 0;
@@ -18,12 +20,15 @@ public:
 	GraphAdj() { InitGraph(); }
 	bool IsGraphEmpty() { return VtxCount == 0; }
 	bool IsGraphFull() { return VtxCount >= MAX_VTXS; }
+	char GetVtxCount() { return VtxCount; }
 	void InitGraph();
-	bool InserVertex(char n);
+	bool InsertVertex(char n);
 	bool InsertEdgeD(int u, int v, int val);
 	bool InsertEdgeUD(int u, int v, int val);
 	bool PrintGraph();
 	bool LoadGraph(char* fname);
+	bool LoadGraph(const char* fname);
+	bool LoadGraph(std::string fname);
 };
 
 /// <summary>
@@ -32,19 +37,30 @@ public:
 void GraphAdj::InitGraph()
 {
 	VtxCount = 0;
-	memset(Adj, 0, sizeof(Adj));
+
+	//일단 포인터의 1차원 배열 만듬
+	//행
+	Adj = new int* [MAX_VTXS];
+
+	for (int i = 0; i < MAX_VTXS; i++)
+	{
+		//각 행의 포인터에 열을 할당
+		Adj[i] = new int[MAX_VTXS];
+	}
 }
 
 /// <summary>
 /// char 값을 받아 노드 이름배열에 추가함
 /// </summary>
 /// <param name="n"></param>
-bool GraphAdj::InserVertex(char n)
+bool GraphAdj::InsertVertex(char n)
 {
 	if (IsGraphFull())
 		return false;
 
 	VertexNames[VtxCount++] = n;
+
+	return true;
 }
 
 /// <summary>
@@ -62,6 +78,8 @@ bool GraphAdj::InsertEdgeD(int u, int v, int val)
 		return false;
 
 	Adj[u][v] = val;
+
+	return true;
 }
 
 /// <summary>
@@ -79,6 +97,8 @@ bool GraphAdj::InsertEdgeUD(int u, int v, int val)
 		return false;
 
 	Adj[u][v] = Adj[v][u] = val;
+
+	return true;
 }
 
 /// <summary>
@@ -87,32 +107,34 @@ bool GraphAdj::InsertEdgeUD(int u, int v, int val)
 /// <returns></returns>
 bool GraphAdj::PrintGraph()
 {
-	if (IsGraphEmpty)
+	if (IsGraphEmpty())
 		return false;
 
 	std::cout << VtxCount << std::endl;
 	for (int i = 0; i < VtxCount; i++)
 	{
-		std::cout << VertexNames[i];
+		std::cout << VertexNames[i] << " ";
 		for (int j = 0; j < VtxCount; j++)
 		{
 			//자리를 맞추기 위한 setw()
 			if (Adj[i][j] == INF)
-				std::cout << "  -";
+				std::cout << std::setw(3) << "-" << " ";
 			else
-				std::cout << " " << std::setw(3) << Adj[i][j];
+				std::cout << std::setw(3) << Adj[i][j] << " ";
 		}
 		std::cout << std::endl;
 	}
 	std::cout << std::endl;
+
+	return true;
 }
 
 /// <summary>
 /// 파일로부터 그래프 불러옴
 /// </summary>
-/// <param name="fname"></param>
+/// <param name="fname">문자열 상수</param>
 /// <returns></returns>
-bool GraphAdj::LoadGraph(char* fname)
+bool GraphAdj::LoadGraph(const char* fname)
 {
 	std::ifstream readGraph;
 	readGraph.open(fname);
@@ -127,14 +149,72 @@ bool GraphAdj::LoadGraph(char* fname)
 
 	//먼저 그래프의 노드 수를 받아옴
 	int n = readGraph.get();
+
+	//ifstream의 int get()은 숫자가 아스키 코드로 됨 
+	//아스키 코드 -> int로 변경
+	n -= 48;
+
 	char c;
+
+	//임시 버퍼
+	char* buf = new char[MAX_VTXS];
+
+	//노드 개수만큼 반복
 	for (int i = 0; i < n; i++)
 	{
-		std::string str;
+		//노드 이름 받아옴
+		readGraph >> c;
+		InsertVertex(c);
 
-		//한 줄 읽어서 str에 저장
-		std::getline(readGraph, str);
+		for (int j = 0; j < n; j++)
+		{
+			//간선 값 읽어옴
+			//공백 만날 때까지 읽어옴
+			readGraph >> buf;
 
+			//문자열 포인터를 생성자로 넘겨 string 만듬
+			std::string str(buf);
+
+			//string -> int로 바꿈
+			int temp = std::stoi(str);
+
+			//노드 자신으로의 간선이 아닌데도
+			//거리가 0이면 INF로 표기
+			if (i != j && temp == 0)
+			{
+				InsertEdgeD(i, j, INF);
+			}
+			else
+				InsertEdgeD(i, j, temp);
+		}
+		//버퍼 비우기
+		memset(buf, 0, MAX_VTXS * sizeof(char));
 		
 	}
+	readGraph.close();
+
+	return true;
+}
+
+/// <summary>
+/// 파일로부터 그래프 불러옴
+/// </summary>
+/// <param name="fname">문자열 포인터</param>
+/// <returns></returns>
+bool GraphAdj::LoadGraph(char* fname)
+{
+	//자료형 호환을 위한 오버로딩
+	const char* temp = fname;
+	return this->LoadGraph(temp);
+}
+
+/// <summary>
+/// 파일로부터 그래프 불러옴
+/// </summary>
+/// <param name="fname">std::string</param>
+/// <returns></returns>
+bool GraphAdj::LoadGraph(std::string fname)
+{
+	const char* temp = fname.c_str();
+	return this->LoadGraph(temp);
 }
